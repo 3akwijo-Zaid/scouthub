@@ -1,0 +1,56 @@
+# ── Java / Gradle ─────────────────────────────────────────
+.gradle/
+build/
+*.class
+*.jar
+*.war
+out/
+
+# ── Node / Web ────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+*.local
+
+# ── Flutter / Dart ────────────────────────────────────────
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/build/
+mobile/pubspec.lock
+*.iml
+
+# ── Python / ML ───────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+ml/models/*.pkl
+ml/models/*.joblib
+ml/models/*.pt
+.ipynb_checkpoints/
+mlruns/
+
+# ── Env & secrets ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── IDE ───────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Docker volumes (if mounted locally) ──────────────────
+postgres-data/
+redis-data/
+ollama-data/
+prometheus-data/
+grafana-data/

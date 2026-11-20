@@ -1,0 +1,120 @@
+openapi: 3.1.0
+info:
+  title: ScoutHub API
+  version: 0.1.0
+  description: |
+    Sprint 0 contract — Role B uses this to build the web and mobile apps
+    before the real backend is ready. Run a mock server with:
+      npx @stoplight/prism-cli mock docs/api/openapi.yaml
+
+servers:
+  - url: http://localhost:8080
+    description: Local backend
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:    { type: string, format: email }
+        password: { type: string, minLength: 8 }
+
+    AuthResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user:  { $ref: '#/components/schemas/User' }
+
+    User:
+      type: object
+      properties:
+        id:    { type: string, format: uuid }
+        email: { type: string }
+        role:  { type: string, enum: [ADMIN, SCOUT, RECRUITER] }
+
+    Player:
+      type: object
+      properties:
+        id:           { type: string, format: uuid }
+        name:         { type: string }
+        position:     { type: string }
+        club:         { type: string }
+        league:       { type: string }
+        nationality:  { type: string }
+        age:          { type: integer }
+        marketValue:  { type: number, description: "Current Transfermarkt value in €" }
+        fairValue:    { type: number, description: "Model predicted value in €" }
+        signal:       { type: string, enum: [UNDERVALUED, OVERVALUED, FAIR] }
+
+    PagedPlayers:
+      type: object
+      properties:
+        content:    { type: array, items: { $ref: '#/components/schemas/Player' } }
+        totalItems: { type: integer }
+        page:       { type: integer }
+        pageSize:   { type: integer }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Authenticate and get JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: JWT token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+
+  /players:
+    get:
+      summary: Search players
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: position
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paged player list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagedPlayers' }
+
+  /players/{id}:
+    get:
+      summary: Get player details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Player detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
