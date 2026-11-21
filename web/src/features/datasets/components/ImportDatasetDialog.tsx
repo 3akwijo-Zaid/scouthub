@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { errorMessage, importDataset } from '../api'
+import { ripple } from '../hooks/ripple'
 import type { DatasetSummary } from '../types'
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
 
 const MAX_SIZE_MB = 20
 
-/** Form to upload a CSV with its title, description, category and source (CdC §5.3). */
+/** Import form: drop or pick a CSV, then title, description, category and source (CdC §5.3). */
 export function ImportDatasetDialog({ onClose, onImported }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
@@ -18,18 +19,34 @@ export function ImportDatasetDialog({ onClose, onImported }: Props) {
   const [source, setSource] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [over, setOver] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !sending && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, sending])
 
   function pickFile(selected: File | null) {
     setError(null)
-    if (selected && selected.size > MAX_SIZE_MB * 1024 * 1024) {
+    if (!selected) return
+    if (!/\.(csv|txt)$/i.test(selected.name)) {
+      setError('Choisissez un fichier .csv.')
+      return
+    }
+    if (selected.size > MAX_SIZE_MB * 1024 * 1024) {
       setError(`Le fichier dépasse ${MAX_SIZE_MB} Mo.`)
-      setFile(null)
       return
     }
     setFile(selected)
-    if (selected && !title) {
-      setTitle(selected.name.replace(/\.(csv|txt)$/i, ''))
-    }
+    if (!title) setTitle(selected.name.replace(/\.(csv|txt)$/i, '').replace(/[_-]+/g, ' '))
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    setOver(false)
+    pickFile(e.dataTransfer.files?.[0] ?? null)
   }
 
   async function submit(event: FormEvent) {
@@ -39,76 +56,88 @@ export function ImportDatasetDialog({ onClose, onImported }: Props) {
       return
     }
     if (!title.trim()) {
-      setError('Le titre est obligatoire.')
+      setError('Donnez un titre au dataset.')
       return
     }
     setSending(true)
     setError(null)
     try {
-      const created = await importDataset({ file, title: title.trim(), description, category, source })
-      onImported(created)
+      onImported(await importDataset({ file, title: title.trim(), description, category, source }))
     } catch (e) {
       setError(errorMessage(e))
-    } finally {
       setSending(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true">
-      <form onSubmit={submit} className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6 shadow-xl">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Importer un dataset</h2>
-          <p className="text-sm text-slate-500">Fichier CSV (séparateur , ; tabulation ou |), {MAX_SIZE_MB} Mo maximum.</p>
-        </div>
+    <div className="sh-datasets !min-h-0 !bg-transparent">
+      <div className="sh-backdrop fixed inset-0 z-50 flex items-end justify-center bg-[rgba(4,14,10,0.72)] sm:items-center sm:p-6"
+        role="dialog" aria-modal="true" aria-labelledby="import-title"
+        onClick={(e) => e.target === e.currentTarget && !sending && onClose()}>
+        <form onSubmit={submit}
+          className="sh-sheet sh-panel w-full max-w-lg space-y-4 rounded-b-none p-6 sm:rounded-b-[18px] !bg-[var(--turf)]">
+          <div className="mx-auto -mt-2 mb-1 h-1.5 w-12 rounded-full bg-[var(--line)] sm:hidden" aria-hidden />
+          <h2 id="import-title" className="font-display text-3xl font-bold">Importer un dataset</h2>
 
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Fichier CSV *</span>
-          <input
-            type="file"
-            accept=".csv,.txt,text/csv"
-            onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
-            className="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white"
-          />
-        </label>
+          <div
+            className="sh-drop cursor-pointer"
+            data-over={over}
+            onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+            onDragLeave={() => setOver(false)}
+            onDrop={onDrop}
+            onClick={() => inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && inputRef.current?.click()}
+          >
+            <input ref={inputRef} type="file" accept=".csv,.txt,text/csv" className="sr-only"
+              onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+            {file ? (
+              <>
+                <span className="font-display block text-xl font-semibold text-[var(--flood)]">{file.name}</span>
+                <span className="text-sm text-[var(--chalk-dim)]">{(file.size / 1024).toFixed(0)} Ko. Touchez pour changer de fichier.</span>
+              </>
+            ) : (
+              <>
+                <span className="font-display block text-xl font-semibold">Déposez un fichier CSV ici</span>
+                <span className="text-sm text-[var(--chalk-dim)]">ou touchez pour le choisir. Séparateur , ; tabulation ou |, {MAX_SIZE_MB} Mo au plus.</span>
+              </>
+            )}
+          </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Titre *</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Description</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        </label>
-
-        <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Catégorie</span>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={80}
-              placeholder="Joueurs, Clubs…" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block text-sm text-[var(--chalk-dim)]">Titre</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className="sh-field" />
           </label>
+
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Source</span>
-            <input value={source} onChange={(e) => setSource(e.target.value)} maxLength={300}
-              placeholder="Kaggle, FBref…" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block text-sm text-[var(--chalk-dim)]">Description</span>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="sh-field" />
           </label>
-        </div>
 
-        {error && <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-sm text-[var(--chalk-dim)]">Catégorie</span>
+              <input value={category} onChange={(e) => setCategory(e.target.value)} maxLength={80}
+                placeholder="Joueurs, clubs…" className="sh-field" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm text-[var(--chalk-dim)]">Source</span>
+              <input value={source} onChange={(e) => setSource(e.target.value)} maxLength={300}
+                placeholder="Kaggle, FBref…" className="sh-field" />
+            </label>
+          </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-md px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
-            Annuler
-          </button>
-          <button type="submit" disabled={sending}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-            {sending ? 'Analyse en cours…' : 'Importer et analyser'}
-          </button>
-        </div>
-      </form>
+          {error && <p role="alert" className="rounded-xl border border-[var(--red)] bg-[rgba(229,72,77,0.12)] px-3 py-2 text-sm">{error}</p>}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} disabled={sending} className="sh-btn-ghost">Annuler</button>
+            <button type="submit" onPointerDown={ripple} disabled={sending} className="sh-btn sh-ripple">
+              {sending ? 'Analyse en cours…' : 'Importer et analyser'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
