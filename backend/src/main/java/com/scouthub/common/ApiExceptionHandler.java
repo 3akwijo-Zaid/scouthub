@@ -1,15 +1,22 @@
 package com.scouthub.common;
 
+import com.scouthub.auth.AuthException;
 import com.scouthub.datasets.DatasetAccessDeniedException;
 import com.scouthub.datasets.DatasetImportException;
 import com.scouthub.datasets.DatasetNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Centralised error handling (CdC §10): every error is returned as an RFC 7807 problem
@@ -32,6 +39,33 @@ public class ApiExceptionHandler {
     @ExceptionHandler(DatasetAccessDeniedException.class)
     public ProblemDetail forbidden(DatasetAccessDeniedException e) {
         return problem(HttpStatus.FORBIDDEN, "Accès refusé", e.getMessage());
+    }
+
+    @ExceptionHandler(AuthException.class)
+    public ProblemDetail auth(AuthException e) {
+        return problem(e.status(), e.title(), e.getMessage());
+    }
+
+    /** Bean Validation errors on a request body: one message per invalid field in {@code errors}. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail invalidBody(MethodArgumentNotValidException e) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(f -> errors.putIfAbsent(f.getField(), f.getDefaultMessage()));
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Requête invalide",
+                errors.isEmpty() ? "Certains champs sont invalides." : String.join(" ", errors.values()));
+        problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail unreadableBody(HttpMessageNotReadableException e) {
+        return problem(HttpStatus.BAD_REQUEST, "Requête invalide", "Le corps de la requête n'est pas un JSON valide.");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail badParameter(MethodArgumentTypeMismatchException e) {
+        return problem(HttpStatus.BAD_REQUEST, "Paramètre invalide",
+                "Valeur invalide pour le paramètre « " + e.getName() + " ».");
     }
 
     @ExceptionHandler({MissingServletRequestParameterException.class, MissingServletRequestPartException.class})
