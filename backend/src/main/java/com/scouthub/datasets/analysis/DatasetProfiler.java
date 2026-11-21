@@ -251,6 +251,12 @@ public final class DatasetProfiler {
         return null;
     }
 
+    /** Columns named id, player_id, club id… are identifiers, not measures. */
+    public static boolean isIdentifierName(String name) {
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.equals("id") || n.endsWith("_id") || n.endsWith(" id");
+    }
+
     /** Linear interpolation between closest ranks, on a sorted array. */
     static double percentile(double[] sorted, double p) {
         if (sorted.length == 1) {
@@ -289,7 +295,9 @@ public final class DatasetProfiler {
 
     private static List<Correlation> correlations(List<ColumnProfile> columns, List<List<String>> rows) {
         List<ColumnProfile> numeric = columns.stream()
-                .filter(c -> c.type().isNumeric() && c.stdDev() != null && c.stdDev() > 0)
+                // Coordinates are excluded: a latitude/longitude "correlation" says nothing about the data
+                .filter(c -> c.type().isNumeric() && c.geoRole() == null && !isIdentifierName(c.name())
+                        && c.stdDev() != null && c.stdDev() > 0)
                 .limit(MAX_CORRELATION_COLUMNS)
                 .toList();
         List<Correlation> result = new ArrayList<>();

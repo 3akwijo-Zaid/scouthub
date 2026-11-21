@@ -127,4 +127,11 @@ class DatasetProfilerTest {
         DatasetProfile.Correlation top = p.correlations().get(0);
         assertTrue(top.coefficient() > 0.99, "goals and shots move together");
     }
+
+    @Test
+    void ignoresIdentifiersInCorrelations() throws IOException {
+        DatasetProfile p = profile("player_id,goals,shots\n1,1,3\n2,2,6\n3,3,9\n4,4,13\n");
+        assertTrue(p.correlations().stream().noneMatch(c -> c.columnA().equals("player_id") || c.columnB().equals("player_id")));
+        assertEquals(1, p.correlations().size());
+    }
 }

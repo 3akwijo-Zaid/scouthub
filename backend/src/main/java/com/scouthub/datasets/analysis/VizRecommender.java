@@ -22,8 +22,10 @@ public final class VizRecommender {
 
     public List<VizRecommendation> recommend(DatasetProfile profile) {
         List<ColumnProfile> columns = profile.columns();
+        // Most informative measures first: highest relative spread (coefficient of variation)
         List<ColumnProfile> measures = columns.stream()
                 .filter(c -> c.type().isNumeric() && c.geoRole() == null && !looksLikeIdentifier(c, profile.rowCount()))
+                .sorted(Comparator.comparingDouble(VizRecommender::relativeSpread).reversed())
                 .toList();
         List<ColumnProfile> categories = columns.stream()
                 .filter(c -> c.type() == ColumnType.CATEGORY || c.type() == ColumnType.BOOLEAN)
@@ -40,7 +42,8 @@ public final class VizRecommender {
         }
 
         // Line: evolution of the first measures over the first date column
-        columns.stream().filter(c -> c.type() == ColumnType.DATE && c.distinct() >= 2).findFirst().ifPresent(date ->
+        columns.stream().filter(c -> c.type() == ColumnType.DATE && c.distinct() >= 2 && !looksLikeBirthDate(c))
+                .findFirst().ifPresent(date ->
                 measures.stream().limit(2).forEach(m -> out.add(new VizRecommendation(ChartType.LINE,
                         "Évolution de " + m.name() + " dans le temps",
                         List.of(date.name(), m.name()),
@@ -98,12 +101,25 @@ public final class VizRecommender {
 
     /** Identifier columns (id, player_id, or unique integers) are not useful on a chart. */
     static boolean looksLikeIdentifier(ColumnProfile c, int rowCount) {
-        String n = c.name().toLowerCase(Locale.ROOT);
-        if (n.equals("id") || n.endsWith("_id") || n.endsWith(" id")) {
+        if (DatasetProfiler.isIdentifierName(c.name())) {
             return true;
         }
         return c.type() == ColumnType.INTEGER && c.distinct() == c.count() && c.count() > 20 && c.missing() == 0
                 && c.count() == rowCount;
+    }
+
+    /** A birth date is a date, but plotting a measure "over time" against it makes no sense. */
+    static boolean looksLikeBirthDate(ColumnProfile c) {
+        String n = c.name().toLowerCase(Locale.ROOT);
+        return n.contains("birth") || n.contains("naissance") || n.equals("dob") || n.equals("ddn");
+    }
+
+    /** Coefficient of variation |σ / μ| (σ alone when μ = 0); 0 when unknown. */
+    static double relativeSpread(ColumnProfile c) {
+        if (c.stdDev() == null || c.mean() == null) {
+            return 0;
+        }
+        return c.mean() == 0 ? c.stdDev() : Math.abs(c.stdDev() / c.mean());
     }
 
     private static boolean isMeasure(String name, List<ColumnProfile> measures) {

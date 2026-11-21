@@ -70,4 +70,32 @@ class VizRecommenderTest {
         List<VizRecommendation> recs = recommend("player_id,value\n1,10\n2,20\n3,30\n");
         assertFalse(recs.stream().anyMatch(r -> r.columns().contains("player_id")));
     }
+
+    @Test
+    void doesNotDrawMeasuresOverBirthDates() throws IOException {
+        List<VizRecommendation> recs = recommend("""
+                name,birth_date,value
+                A,2001-03-01,10
+                B,1998-07-12,25
+                C,2003-11-30,4
+                """);
+        assertFalse(has(recs, VizRecommendation.ChartType.LINE));
+    }
+
+    @Test
+    void comparesCategoriesOnTheMostVariableMeasure() throws IOException {
+        List<VizRecommendation> recs = recommend("""
+                position,age,value
+                DF,24,1
+                MF,25,30
+                FW,26,4
+                DF,25,60
+                MF,24,2
+                FW,25,45
+                """);
+        VizRecommendation bar = recs.stream()
+                .filter(r -> r.chart() == VizRecommendation.ChartType.BAR && r.columns().size() == 2)
+                .findFirst().orElseThrow();
+        assertEquals(List.of("position", "value"), bar.columns());
+    }
 }
