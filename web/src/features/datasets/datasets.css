@@ -23,6 +23,10 @@
   --bronze: #c98a55;
 
   min-height: 100vh;
+  /* The chalk centre circle overflows on purpose: clip it instead of letting the page scroll sideways.
+     `clip` (unlike `hidden`) does not create a scroll container, so sticky headers keep working. */
+  overflow-x: hidden;
+  overflow-x: clip;
   color: var(--chalk);
   font-family: 'Barlow', system-ui, sans-serif;
   /* mowing stripes of a football pitch */

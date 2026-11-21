@@ -26,6 +26,8 @@ const TYPE_LABELS: Record<ColumnType, string> = {
   TEXT: 'Texte',
 }
 
+// The recommended charts are a placeholder: Saad's exploration work (linked filters, chart builder,
+// drill-down, player comparison) replaces them. Until then they are drawn on a sample, said on screen.
 const SAMPLE_SIZE = 1000
 
 /** One dataset: scoreboard with the quality score, recommended charts, column statistics and rows. */
