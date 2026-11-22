@@ -27,8 +27,8 @@ import java.util.List;
 /**
  * Dataset management (CdC §5.3) and exploration (CdC §5.4).
  * <p>
- * Role checks use {@code @PreAuthorize}; they take effect once {@code @EnableMethodSecurity}
- * is added in the security configuration (auth package).
+ * Role checks use {@code @PreAuthorize} (method security is enabled in the auth package's SecurityConfig).
+ * The web app mirrors these rules in features/datasets/permissions.ts.
  */
 @RestController
 @RequestMapping("/datasets")

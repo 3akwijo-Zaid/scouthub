@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useSession } from '@/features/auth/session'
 import { deleteDataset, errorMessage, getDataset, getSampleRows } from './api'
 import { formatNumber, formatPercent } from './chartData'
 import { RecommendedChart } from './components/RecommendedChart'
 import { RowsTable } from './components/RowsTable'
 import { useCountUp } from './hooks/useCountUp'
 import { useSwipe } from './hooks/useSwipe'
+import { canDeleteDataset } from './permissions'
 import { TIERS } from './tiers'
 import type { ColumnInfo, ColumnType, DatasetDetail, QualityReport, Row } from './types'
 import './datasets.css'
@@ -39,6 +41,7 @@ export function DatasetDetailPage() {
   const [sample, setSample] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
+  const user = useSession((s) => s.user)
 
   useEffect(() => {
     if (!Number.isFinite(datasetId)) return
@@ -96,6 +99,7 @@ export function DatasetDetailPage() {
   }
 
   const { dataset, quality } = detail
+  const canDelete = canDeleteDataset(user, dataset.ownerEmail)
   const numericColumns = detail.columns.filter((c) => c.type === 'INTEGER' || c.type === 'DECIMAL').length
 
   return (
@@ -168,11 +172,13 @@ export function DatasetDetailPage() {
           {tab === 'data' && <RowsTable datasetId={datasetId} columns={detail.columns} />}
         </div>
 
-        <footer className="mt-16 border-t border-[var(--line)] pt-6">
-          <button onClick={remove} className="text-sm text-[var(--chalk-dim)] transition hover:text-[var(--red)]">
-            Supprimer ce dataset
-          </button>
-        </footer>
+        {canDelete && (
+          <footer className="mt-16 border-t border-[var(--line)] pt-6">
+            <button onClick={remove} className="text-sm text-[var(--chalk-dim)] transition hover:text-[var(--red)]">
+              Supprimer ce dataset
+            </button>
+          </footer>
+        )}
       </div>
     </div>
   )

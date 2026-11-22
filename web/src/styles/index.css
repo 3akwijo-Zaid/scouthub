@@ -13,7 +13,7 @@
 
 :root {
   /* channels "r g b" so Tailwind can apply opacity: bg-surface/60
-     Palette from the "ScoutHub Login v4" design (Claude Design). */
+     Palette from the "ScoutHub Login v4" design. */
   --sh-bg: 11 17 32;          /* #0b1120 page, form side */
   --sh-surface: 19 26 46;     /* #131a2e brand panel, sidebar, cards */
   --sh-raised: 27 37 64;      /* #1b2540 inputs, hovered rows */
