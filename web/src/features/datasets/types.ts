@@ -106,10 +106,3 @@ export interface RowsQuery {
   sort?: string
   dir?: 'asc' | 'desc'
 }
-
-/** RFC 7807 error body returned by the backend */
-export interface Problem {
-  title?: string
-  status?: number
-  detail?: string
-}

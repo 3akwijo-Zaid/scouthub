@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '@/features/auth/session'
 import { errorMessage, listDatasets } from './api'
 import { DatasetCard } from './components/DatasetCard'
 import { ImportDatasetDialog } from './components/ImportDatasetDialog'
 import { ripple } from './hooks/ripple'
+import { canImportDatasets } from './permissions'
 import type { DatasetSummary } from './types'
 import './datasets.css'
 
 /** Imported datasets as a collection of cards, with search, category filter and import. */
 export function DatasetsPage() {
   const navigate = useNavigate()
+  const canImport = canImportDatasets(useSession((s) => s.user))
   const [datasets, setDatasets] = useState<DatasetSummary[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
@@ -47,9 +50,11 @@ export function DatasetsPage() {
               Chaque fichier importé reçoit une note de qualité, des statistiques par colonne et des graphiques choisis pour lui.
             </p>
           </div>
-          <button onPointerDown={ripple} onClick={() => setImporting(true)} className="sh-btn sh-ripple">
-            Importer un CSV
-          </button>
+          {canImport && (
+            <button onPointerDown={ripple} onClick={() => setImporting(true)} className="sh-btn sh-ripple">
+              Importer un CSV
+            </button>
+          )}
         </header>
 
         {!isEmpty && (
@@ -66,12 +71,17 @@ export function DatasetsPage() {
 
         {error && <p role="alert" className="mb-6 rounded-xl border border-[var(--red)] bg-[rgba(229,72,77,0.12)] px-4 py-3">{error}</p>}
 
-        {isEmpty ? (
+        {isEmpty && canImport ? (
           <button onPointerDown={ripple} onClick={() => setImporting(true)}
             className="sh-drop sh-ripple w-full py-16 text-[var(--chalk-dim)] transition hover:text-[var(--chalk)]">
             <span className="font-display block text-3xl font-bold text-[var(--chalk)]">Aucun dataset pour l'instant</span>
             <span className="mt-2 block">Importez un premier fichier CSV pour le voir analysé ici.</span>
           </button>
+        ) : isEmpty ? (
+          <div className="sh-drop w-full py-16 text-center text-[var(--chalk-dim)]">
+            <span className="font-display block text-3xl font-bold text-[var(--chalk)]">Aucun dataset pour l'instant</span>
+            <span className="mt-2 block">Les fichiers importés par les analystes apparaîtront ici.</span>
+          </div>
         ) : (
           <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {loading && datasets.length === 0
@@ -87,7 +97,7 @@ export function DatasetsPage() {
         )}
       </div>
 
-      {importing && (
+      {importing && canImport && (
         <ImportDatasetDialog
           onClose={() => setImporting(false)}
           onImported={(created) => {

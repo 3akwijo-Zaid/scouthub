@@ -1,19 +1,10 @@
-import axios, { AxiosError } from 'axios'
-import type { DatasetDetail, DatasetSummary, Problem, RowsPage, RowsQuery } from './types'
+import { api, toApiError } from '@/lib/api'
+import type { DatasetDetail, DatasetSummary, RowsPage, RowsQuery } from './types'
 
 /**
- * HTTP client for the datasets feature.
- * TODO(Zaid): replace with the shared API client once it exists (same baseURL + JWT interceptor).
+ * Calls to the datasets endpoints. They go through the shared client, so the token is sent
+ * on every request and an expired session sends the user back to the login page.
  */
-const http = axios.create({ baseURL: '/api' })
-
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('scouthub.token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
 
 export interface ImportPayload {
   file: File
@@ -24,19 +15,19 @@ export interface ImportPayload {
 }
 
 export async function listDatasets(q?: string, category?: string): Promise<DatasetSummary[]> {
-  const { data } = await http.get<DatasetSummary[]>('/datasets', {
+  const { data } = await api.get<DatasetSummary[]>('/datasets', {
     params: { q: q || undefined, category: category || undefined },
   })
   return data
 }
 
 export async function getDataset(id: number): Promise<DatasetDetail> {
-  const { data } = await http.get<DatasetDetail>(`/datasets/${id}`)
+  const { data } = await api.get<DatasetDetail>(`/datasets/${id}`)
   return data
 }
 
 export async function getRows(id: number, query: RowsQuery): Promise<RowsPage> {
-  const { data } = await http.get<RowsPage>(`/datasets/${id}/rows`, { params: query })
+  const { data } = await api.get<RowsPage>(`/datasets/${id}/rows`, { params: query })
   return data
 }
 
@@ -59,22 +50,19 @@ export async function importDataset(payload: ImportPayload): Promise<DatasetSumm
   if (payload.description) form.append('description', payload.description)
   if (payload.category) form.append('category', payload.category)
   if (payload.source) form.append('source', payload.source)
-  const { data } = await http.post<DatasetSummary>('/datasets', form)
+  const { data } = await api.post<DatasetSummary>('/datasets', form)
   return data
 }
 
 export async function deleteDataset(id: number): Promise<void> {
-  await http.delete(`/datasets/${id}`)
+  await api.delete(`/datasets/${id}`)
 }
 
 /** Message to show to the user for any error thrown by the functions above. */
 export function errorMessage(error: unknown): string {
-  if (error instanceof AxiosError) {
-    const problem = error.response?.data as Problem | undefined
-    if (problem?.detail) return problem.detail
-    if (error.response?.status === 401) return 'Session expirée, reconnectez-vous.'
-    if (error.response?.status === 403) return "Vous n'avez pas les droits pour cette action."
-    if (!error.response) return 'Serveur injoignable.'
+  const { status, message } = toApiError(error)
+  if (status === 403 && message === 'Une erreur inattendue est survenue.') {
+    return "Vous n'avez pas les droits pour cette action."
   }
-  return 'Une erreur inattendue est survenue.'
+  return message
 }
