@@ -1,21 +1,14 @@
-// Minimal app shell so the datasets feature runs on its own.
-// TODO(Zaid): replace with the real shell (layout, navigation, auth routes, design system).
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
-import { datasetsRoutes } from './features/datasets'
-import './index.css'
+import { RouterProvider } from 'react-router-dom'
+import { router } from './app/router'
+import { useSession } from './features/auth/session'
+import './styles/index.css'
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <Outlet />,
-    children: [
-      { index: true, element: <Navigate to="/datasets" replace /> },
-      ...datasetsRoutes,
-    ],
-  },
-])
+// A session restored from storage is re-checked against the API (role or account may have changed).
+if (useSession.getState().status === 'checking') {
+  void useSession.getState().refresh()
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,0 +1,59 @@
+/* ScoutHub design system — tokens + base styles.
+   Identity from the project dossier: night navy, "market up" green accent, condensed display type.
+   Feature pages may scope their own theme (e.g. .sh-datasets) on top of these tokens. */
+@import '@fontsource/barlow/400.css';
+@import '@fontsource/barlow/500.css';
+@import '@fontsource/barlow/600.css';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/barlow-condensed/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* channels "r g b" so Tailwind can apply opacity: bg-surface/60
+     Palette from the "ScoutHub Login v4" design (Claude Design). */
+  --sh-bg: 11 17 32;          /* #0b1120 page, form side */
+  --sh-surface: 19 26 46;     /* #131a2e brand panel, sidebar, cards */
+  --sh-raised: 27 37 64;      /* #1b2540 inputs, hovered rows */
+  --sh-line: 120 140 184;     /* borders, used at low opacity */
+  --sh-fg: 238 242 248;       /* #eef2f8 text */
+  --sh-muted: 138 156 196;    /* #8a9cc4 secondary text (blue-grey) */
+  --sh-accent: 34 197 94;     /* #22c55e brand green: links, checks, radar ("en hausse") */
+  --sh-accent-fg: 4 30 14;    /* text on bright accent */
+  --sh-action: 31 128 70;     /* #1f8046 primary buttons (white text) */
+  --sh-danger: 242 85 90;     /* #f2555a ("en baisse", errors) */
+  --sh-warn: 245 179 66;      /* #f5b342 */
+  --sh-info: 59 111 216;      /* #3b6fd8 second series (radar, Galaxy) */
+  color-scheme: dark;
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  /* no elastic "stretch" or bounce when scrolling past the edge of the page */
+  html, body { overscroll-behavior: none; }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-size: 15px;
+  }
+  h1, h2, h3 { @apply font-display; letter-spacing: 0.005em; text-wrap: balance; }
+  :focus-visible { outline: 2px solid rgb(var(--sh-accent)); outline-offset: 2px; }
+  ::selection { background: rgb(var(--sh-accent) / 0.35); }
+}
+
+@layer components {
+  .sh-card { @apply rounded-xl border border-line/15 bg-surface; }
+  .sh-label { @apply text-xs font-medium uppercase tracking-wider text-muted; }
+  /* 16px on phones: iOS Safari zooms into any field with smaller text when it gets focus */
+  .sh-input {
+    @apply w-full rounded-lg border border-line/15 bg-raised px-4 py-3 text-base text-fg placeholder:text-muted/50
+      transition-colors focus:border-accent focus:outline-none sm:text-[15px];
+  }
+  .sh-link { @apply font-medium text-accent hover:underline underline-offset-4; }
+  .sh-input[aria-invalid='true'] { @apply border-danger; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
