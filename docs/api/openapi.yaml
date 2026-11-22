@@ -18,26 +18,81 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  responses:
+    BadRequest:
+      description: Invalid request body (see "errors" for each field)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing, invalid or expired token, or disabled account
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: The user's role does not allow this action
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
   schemas:
+    # ── Auth & users (owner: Zaid) ────────────────────────────────────
+    Role:
+      type: string
+      enum: [ADMIN, ANALYST, SCOUT, RECRUITER]
+      description: Self-registered accounts are SCOUT; an ADMIN grants the other roles.
+
     LoginRequest:
       type: object
       required: [email, password]
       properties:
         email:    { type: string, format: email }
-        password: { type: string, minLength: 8 }
+        password: { type: string }
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:    { type: string, format: email, maxLength: 255 }
+        password: { type: string, minLength: 8, maxLength: 72 }
+        fullName: { type: string, maxLength: 150 }
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName: { type: string, maxLength: 150 }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword:     { type: string, minLength: 8, maxLength: 72 }
+
+    UpdateUserRequest:
+      type: object
+      description: Only the fields sent are changed. An admin cannot change their own role or disable themselves.
+      properties:
+        role:    { $ref: '#/components/schemas/Role' }
+        enabled: { type: boolean }
 
     AuthResponse:
       type: object
       properties:
-        token: { type: string }
-        user:  { $ref: '#/components/schemas/User' }
+        token:     { type: string, description: 'Send as "Authorization: Bearer <token>"' }
+        expiresAt: { type: string, format: date-time }
+        user:      { $ref: '#/components/schemas/User' }
 
     User:
       type: object
       properties:
-        id:    { type: string, format: uuid }
-        email: { type: string }
-        role:  { type: string, enum: [ADMIN, ANALYST, SCOUT, RECRUITER] }
+        id:          { type: string, format: uuid }
+        email:       { type: string }
+        fullName:    { type: [string, 'null'] }
+        role:        { $ref: '#/components/schemas/Role' }
+        enabled:     { type: boolean }
+        createdAt:   { type: string, format: date-time }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
 
     Player:
       type: object
@@ -69,6 +124,10 @@ components:
         title:  { type: string, example: "Requête invalide" }
         status: { type: integer, example: 400 }
         detail: { type: string, example: "Seuls les fichiers .csv sont acceptés." }
+        errors:
+          type: object
+          additionalProperties: { type: string }
+          description: Validation errors only — one message per invalid field
 
     DatasetSummary:
       type: object
@@ -179,8 +238,36 @@ security:
   - bearerAuth: []
 
 paths:
+  # ── Auth (owner: Zaid) ────────────────────────────────────────────
+  # Every route except register / login needs "Authorization: Bearer <token>".
+  # 401 = no / invalid / expired token or disabled account · 403 = role not allowed.
+  # Role checks in controllers: @PreAuthorize("hasRole('ANALYST')"); authentication.getName() is the email.
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create an account (role SCOUT) and get a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: Account created, logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Email already used
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /auth/login:
     post:
+      tags: [Auth]
       summary: Authenticate and get JWT
       security: []
       requestBody:
@@ -194,6 +281,106 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401':
+          description: Wrong email or password (same message for both)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Account disabled
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Profile of the logged-in user
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Auth]
+      summary: Update own profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me/password:
+    put:
+      tags: [Auth]
+      summary: Change own password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Password changed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ── Users (owner: Zaid, ADMIN only) ───────────────────────────────
+  /users:
+    get:
+      tags: [Users]
+      summary: List users (ADMIN)
+      parameters:
+        - { in: query, name: q, schema: { type: string }, description: Search in email and name }
+        - { in: query, name: role, schema: { $ref: '#/components/schemas/Role' } }
+      responses:
+        '200':
+          description: Users, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /users/{id}:
+    patch:
+      tags: [Users]
+      summary: Change a user's role or enable / disable the account (ADMIN)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserRequest' }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Unknown user
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '409':
+          description: Admin tried to change their own role or disable themselves
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /players:
     get:
