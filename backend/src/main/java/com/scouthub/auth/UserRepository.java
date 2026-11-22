@@ -18,12 +18,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByRole(Role role);
 
-    /** Admin list: optional text search on email / name and optional role filter. */
+    /**
+     * Admin list: text search on email / name ({@code ""} matches everyone) and optional role filter.
+     * The text must never be null: PostgreSQL receives an untyped null as bytea and {@code lower()} fails.
+     */
     @Query("""
             select u from User u
             where (:role is null or u.role = :role)
-              and (:q is null
-                   or lower(u.email) like lower(concat('%', :q, '%'))
+              and (lower(u.email) like lower(concat('%', :q, '%'))
                    or lower(coalesce(u.fullName, '')) like lower(concat('%', :q, '%')))
             order by u.createdAt desc
             """)

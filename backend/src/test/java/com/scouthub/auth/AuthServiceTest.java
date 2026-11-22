@@ -20,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AuthServiceTest {
@@ -102,6 +104,17 @@ class AuthServiceTest {
                 .isInstanceOf(AuthException.class);
         service.changePassword("scout@scouthub.ma", new ChangePasswordRequest("motdepasse1", "nouveau-mdp"));
         assertThat(encoder.matches("nouveau-mdp", u.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void listWithoutSearchSendsAnEmptyStringNeverNull() {
+        // PostgreSQL types a null bind parameter as bytea and lower(bytea) fails (seen on the real database)
+        when(users.search("", null)).thenReturn(java.util.List.of());
+
+        service.listUsers(null, null);
+        service.listUsers("   ", null);
+
+        verify(users, times(2)).search("", null);
     }
 
     @Test

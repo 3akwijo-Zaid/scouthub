@@ -102,7 +102,8 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public List<UserResponse> listUsers(String query, Role role) {
-        return users.search(blankToNull(query), role).stream().map(UserResponse::of).toList();
+        String text = query == null ? "" : query.trim();
+        return users.search(text, role).stream().map(UserResponse::of).toList();
     }
 
     @Transactional
