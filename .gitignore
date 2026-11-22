@@ -3,6 +3,8 @@
 build/
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 *.war
 out/
 
@@ -30,6 +32,8 @@ venv/
 ml/models/*.pkl
 ml/models/*.joblib
 ml/models/*.pt
+ml/data/raw/
+ml/data/processed/*.csv
 .ipynb_checkpoints/
 mlruns/
 

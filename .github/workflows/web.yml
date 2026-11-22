@@ -2,26 +2,39 @@ name: Web CI
 
 on:
   push:
-    paths: ['web/**']
+    branches: [main, develop]
+    paths: ['web/**', '.github/workflows/web.yml']
   pull_request:
-    paths: ['web/**']
+    paths: ['web/**', '.github/workflows/web.yml']
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
+      # Skipped until the Vite app (index.html, src/, package-lock.json) is committed
+      - name: Check that the web app exists
+        id: guard
+        run: |
+          if [ -f package-lock.json ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "::notice::web/package-lock.json missing, web build skipped"; fi
       - uses: actions/setup-node@v4
+        if: steps.guard.outputs.ready == 'true'
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
       - name: Install
-        working-directory: web
+        if: steps.guard.outputs.ready == 'true'
         run: npm ci
       - name: Lint
-        working-directory: web
+        if: steps.guard.outputs.ready == 'true'
         run: npm run lint
-      - name: Build
-        working-directory: web
+      - name: Type check and build
+        if: steps.guard.outputs.ready == 'true'
         run: npm run build

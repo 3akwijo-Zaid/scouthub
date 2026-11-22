@@ -1,0 +1,27 @@
+# Prometheus — scrape configuration for ScoutHub
+# Started with: docker compose --profile monitoring up -d
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Spring Boot (Micrometer) — served under the /api context path
+  - job_name: scouthub-backend
+    metrics_path: /api/actuator/prometheus
+    static_configs:
+      - targets: ['backend:8080']
+        labels:
+          service: backend
+
+  # FastAPI ML service (prometheus-fastapi-instrumentator)
+  - job_name: scouthub-ml
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ml:8000']
+        labels:
+          service: ml
+
+  # Prometheus itself
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

@@ -8,8 +8,8 @@ info:
       npx @stoplight/prism-cli mock docs/api/openapi.yaml
 
 servers:
-  - url: http://localhost:8080
-    description: Local backend
+  - url: http://localhost:8080/api
+    description: Local backend (every route is served under /api)
 
 components:
   securitySchemes:
@@ -37,7 +37,7 @@ components:
       properties:
         id:    { type: string, format: uuid }
         email: { type: string }
-        role:  { type: string, enum: [ADMIN, SCOUT, RECRUITER] }
+        role:  { type: string, enum: [ADMIN, ANALYST, SCOUT, RECRUITER] }
 
     Player:
       type: object
@@ -58,6 +58,120 @@ components:
       properties:
         content:    { type: array, items: { $ref: '#/components/schemas/Player' } }
         totalItems: { type: integer }
+        page:       { type: integer }
+        pageSize:   { type: integer }
+
+    # ── Datasets (owner: Aymen) ───────────────────────────────────────
+    Problem:
+      type: object
+      description: RFC 7807 error body returned by every endpoint (application/problem+json)
+      properties:
+        title:  { type: string, example: "Requête invalide" }
+        status: { type: integer, example: 400 }
+        detail: { type: string, example: "Seuls les fichiers .csv sont acceptés." }
+
+    DatasetSummary:
+      type: object
+      properties:
+        id:           { type: integer, format: int64 }
+        title:        { type: string }
+        description:  { type: [string, 'null'] }
+        category:     { type: [string, 'null'] }
+        source:       { type: [string, 'null'] }
+        fileName:     { type: string }
+        ownerEmail:   { type: [string, 'null'] }
+        importedAt:   { type: string, format: date-time }
+        rowCount:     { type: integer }
+        columnCount:  { type: integer }
+        qualityScore: { type: number, description: "0 to 100" }
+        qualityGrade: { type: string, enum: [A, B, C, D] }
+
+    ColumnProfile:
+      type: object
+      description: Statistics of one column. Numeric fields are null for non-numeric columns.
+      properties:
+        position: { type: integer }
+        name:     { type: string }
+        type:     { type: string, enum: [INTEGER, DECIMAL, BOOLEAN, DATE, CATEGORY, TEXT] }
+        count:    { type: integer, description: "non-missing values" }
+        missing:  { type: integer }
+        distinct: { type: integer }
+        invalid:  { type: integer, description: "values that do not match the column type" }
+        min:      { type: [number, 'null'] }
+        max:      { type: [number, 'null'] }
+        mean:     { type: [number, 'null'] }
+        median:   { type: [number, 'null'] }
+        stdDev:   { type: [number, 'null'] }
+        q1:       { type: [number, 'null'] }
+        q3:       { type: [number, 'null'] }
+        outliers: { type: [integer, 'null'], description: "IQR rule" }
+        minDate:  { type: [string, 'null'], format: date }
+        maxDate:  { type: [string, 'null'], format: date }
+        topValues:
+          type: [array, 'null']
+          items:
+            type: object
+            properties:
+              value: { type: string }
+              count: { type: integer }
+        geoRole:  { type: [string, 'null'], enum: [LATITUDE, LONGITUDE, null] }
+
+    ColumnInfo:
+      type: object
+      properties:
+        position: { type: integer }
+        name:     { type: string }
+        type:     { type: string, enum: [INTEGER, DECIMAL, BOOLEAN, DATE, CATEGORY, TEXT] }
+        profile:  { $ref: '#/components/schemas/ColumnProfile' }
+
+    QualityReport:
+      type: object
+      properties:
+        score:        { type: number, description: "100 × (0.40·completeness + 0.20·uniqueness + 0.25·validity + 0.15·consistency)" }
+        grade:        { type: string, enum: [A, B, C, D] }
+        completeness: { type: number, description: "0 to 1" }
+        uniqueness:   { type: number }
+        validity:     { type: number }
+        consistency:  { type: number }
+        issues:       { type: array, items: { type: string } }
+
+    VizRecommendation:
+      type: object
+      properties:
+        chart:    { type: string, enum: [MAP, LINE, SCATTER, BAR, PIE, HISTOGRAM, BOX] }
+        title:    { type: string }
+        columns:  { type: array, items: { type: string }, description: "x first, then y" }
+        reason:   { type: string }
+        priority: { type: integer }
+
+    Correlation:
+      type: object
+      properties:
+        columnA:     { type: string }
+        columnB:     { type: string }
+        coefficient: { type: number, description: "Pearson r, -1 to 1" }
+        pairs:       { type: integer }
+
+    DatasetDetail:
+      type: object
+      properties:
+        dataset:         { $ref: '#/components/schemas/DatasetSummary' }
+        duplicateRows:   { type: integer }
+        columns:         { type: array, items: { $ref: '#/components/schemas/ColumnInfo' } }
+        quality:         { $ref: '#/components/schemas/QualityReport' }
+        recommendations: { type: array, items: { $ref: '#/components/schemas/VizRecommendation' } }
+        correlations:    { type: array, items: { $ref: '#/components/schemas/Correlation' } }
+
+    RowsPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            description: 'One row: { "column name": value }'
+        totalItems: { type: integer, format: int64 }
         page:       { type: integer }
         pageSize:   { type: integer }
 
@@ -118,3 +232,113 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Player' }
+
+  # ── Datasets (owner: Aymen) ─────────────────────────────────────────
+  /datasets:
+    get:
+      tags: [Datasets]
+      summary: List datasets
+      parameters:
+        - { in: query, name: q, schema: { type: string }, description: "searched in title and description" }
+        - { in: query, name: category, schema: { type: string } }
+      responses:
+        '200':
+          description: Datasets, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/DatasetSummary' } }
+    post:
+      tags: [Datasets]
+      summary: Import a CSV file (ANALYST or ADMIN)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title]
+              properties:
+                file:        { type: string, format: binary, description: ".csv, separator , ; tab or |, max 20 MB" }
+                title:       { type: string, maxLength: 200 }
+                description: { type: string }
+                category:    { type: string, maxLength: 80 }
+                source:      { type: string, maxLength: 300 }
+      responses:
+        '201':
+          description: Dataset created (Location header points to it)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DatasetSummary' }
+        '400':
+          description: Invalid file or missing title
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '413':
+          description: File too large
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /datasets/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: integer, format: int64 } }
+    get:
+      tags: [Datasets]
+      summary: Dataset detail — column profiles, quality report, recommended charts, correlations
+      responses:
+        '200':
+          description: Dataset detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DatasetDetail' }
+        '404':
+          description: Unknown dataset
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [Datasets]
+      summary: Delete a dataset (its owner or an ADMIN)
+      responses:
+        '204': { description: Deleted }
+        '403':
+          description: Not the owner
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Unknown dataset
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /datasets/{id}/rows:
+    get:
+      tags: [Datasets]
+      summary: Dataset rows — paginated, with search, column filter and sort
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer, format: int64 } }
+        - { in: query, name: page, schema: { type: integer, default: 0 } }
+        - { in: query, name: size, schema: { type: integer, default: 50, maximum: 200 } }
+        - { in: query, name: q, schema: { type: string }, description: "searched in every cell" }
+        - { in: query, name: filterColumn, schema: { type: string } }
+        - { in: query, name: filterValue, schema: { type: string }, description: "case-insensitive contains" }
+        - { in: query, name: sort, schema: { type: string }, description: "column name; numeric columns sort as numbers" }
+        - { in: query, name: dir, schema: { type: string, enum: [asc, desc], default: asc } }
+      responses:
+        '200':
+          description: One page of rows
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RowsPage' }
+        '400':
+          description: Unknown column in sort or filterColumn
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Unknown dataset
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }

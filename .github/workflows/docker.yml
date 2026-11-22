@@ -1,0 +1,47 @@
+name: Docker images
+
+# Builds every image on pull requests to main/develop, so a broken Dockerfile is caught before merge.
+on:
+  pull_request:
+    branches: [main, develop]
+    paths: ['backend/**', 'ml/**', 'web/**', 'docker-compose.yml', '.github/workflows/docker.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: backend
+            target: ''
+          - service: ml
+            context: ml
+            target: ''
+          - service: web
+            context: web
+            target: prod
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip web until the Vite app exists
+        id: guard
+        run: |
+          if [ "${{ matrix.service }}" = "web" ] && [ ! -f web/package-lock.json ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.guard.outputs.skip != 'true'
+      - name: Build ${{ matrix.service }}
+        if: steps.guard.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

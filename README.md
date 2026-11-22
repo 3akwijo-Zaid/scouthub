@@ -39,12 +39,12 @@ npx @stoplight/prism-cli mock docs/api/openapi.yaml
 
 | Service    | URL locale             | Description               |
 |------------|------------------------|---------------------------|
-| Backend    | http://localhost:8080  | API REST + Swagger UI     |
-| Swagger UI | http://localhost:8080/swagger-ui.html | Docs interactives |
+| Backend    | http://localhost:8080/api | API REST (toutes les routes sous /api) |
+| Swagger UI | http://localhost:8080/api/swagger-ui.html | Docs interactives |
 | ML         | http://localhost:8000  | FastAPI + modèles         |
 | Web        | http://localhost:5173  | App React                 |
 | Ollama     | http://localhost:11434 | LLM local (profil ai)     |
-| Prometheus | http://localhost:9090  | Métriques (profil monitoring) |
+| Prometheus | http://localhost:9090  | Métriques (profil monitoring) — backend: /api/actuator/prometheus, ml: /metrics |
 | Grafana    | http://localhost:3000  | Dashboards (profil monitoring) |
 
 ## Branches
@@ -62,3 +62,10 @@ npx @stoplight/prism-cli mock docs/api/openapi.yaml
 | A — Backend | Spring Boot API, auth, PostgreSQL + pgvector, Ollama RAG, CI/CD |
 | B — Web + Mobile | React (Galaxy, Fair Value, Copilot UI), Flutter (rapports, watchlist) |
 | C — Data + ML | Données Transfermarkt/FBref, XGBoost + SHAP, UMAP, FastAPI |
+
+## Conventions
+
+- **Migrations Flyway** : `V1__init.sql` contient les tables partagées. Ensuite, chaque migration est nommée avec un horodatage
+  (`V20261121_1800__datasets.sql`) pour que deux branches ne prennent jamais le même numéro de version.
+- **Erreurs API** : toutes les erreurs sont renvoyées au format RFC 7807 (`application/problem+json`) par `common/ApiExceptionHandler`.
+- **Tests** : `cd backend && ./gradlew build` · `cd ml && pip install -r requirements-dev.txt && pytest`.
